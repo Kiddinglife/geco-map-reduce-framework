@@ -87,7 +87,8 @@ the correct operation on it such as sum, find max  and so on. (api user can spec
 4   set up pyc files path for uploading to initor
      4.1
 5   set up output and input path in remote machines (this required when backup stats result for re-use)
-6   set up if delete the pyc files or keep it for reusage when all done
+6   set up if cache this job at remote initor
+     if so, will NOT delete the pyc files or keep it for reusage when all done
 7   set up output results path in local client (this is required if we want to store the spin resukts in local host)
 8   set up if quiet to client (this is required if we want see spin results in local host's console)
 9   set up expected mapper count to run (we may get a number less than what we want from initor)
@@ -96,8 +97,7 @@ the correct operation on it such as sum, find max  and so on. (api user can spec
 blocked for some reason, we can restart them)
 12 set up flag if we are stats sourcer (this is required when the kv pairs need to be generated in real-time, 
 if this flag NOT set-up, this avoid run empty GetStats() method)
-13 set up initor ip adress and port if it is located in WAN otherwise leave them alone
-(this is required when connect to initor.)
+13 set up initor ip adress and port 
 )
 3) API user runs it in cmd console to submit a job to map-reduce cluster
  

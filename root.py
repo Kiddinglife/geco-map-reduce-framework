@@ -29,26 +29,83 @@ it will parse these 4 digits to locate the correct place that stores value and v
 13 set up initor ip adress and port if it is located in WAN otherwise leave them alone
 (this is required when connect to initor.)
 '''
-class FakedMintedEngine(object):
-    gamestates = [{"requestaction": "freespin", "winnings": 12, "stake": 15, "win":20},
-                {"requestaction": "freespin", "winnings": 12, "stake": 15, "win":20},
-                {"requestaction": "spin", "winnings": 12, "stake": 15, "win":20}]
-    
-    def play(self):
-        gamestate = FakedMintedEngine.gamestates.pop()
-        if gamestate != None:
-            return gamestate;
-    
-class JobConfig(object):
-    kv_cfg = []
-    pass
+# this means this file must put with the same package with engine file
+from engine import FakedMintedEngine
 
+class JobConfig(object):
+    def __init__(self):
+        self.configs = {
+                    # you MUST specify:
+                    "job_name": "",
+                    "job_pyc_paths": None, # tuple (many dir path)
+                    "job_search_path":"",
+                    "job_module_names": "", #eg, (root.py, Job)
+                    "job_connection_address":None, # tuple (ip, port)
+                    
+                    # default items
+                    "job_num": 1,
+                    "job_order": 0,          
+                    "job_quiet": False,
+                    
+                    # will store the job results
+                    # False means do not store any stats in local machine drive
+                    "job_local_ouput_path":"/temp/%s.result.dir" % self.configs["job_name"],
+                    
+                    #will be use to store mapped itermediate stats and reduced final stats in text files as backup
+                    # False means do not store any stats in remote machine drive
+                    "job_remote_ouput_path":"/temp/%s.output.dir" % self.configs["job_name"],
+                    
+                    #will be use to store the job pyc files
+                    "job_remote_input_path":"/temp/%s.input.dir" % self.configs["job_name"],
+                    "job_expected_mapper":1,
+                    "job_expected_reducer":1,
+                    "job_heartbeat_interval":1000,  # ms
+                    }
+        
+    def job_name(self, name):
+        self.configs['job_name'] = name
+    def job_pyc_paths(self, job_pyc_paths):
+        self.configs['job_pyc_paths'] = job_pyc_paths
+    def job_search_path(self, job_self_path):
+        self.configs['job_search_path'] = self.configs['job_remote_input_path']+job_self_path
+    def job_module_names(self, job_module_names):
+        self.configs['job_module_names'] = job_module_names
+    def job_num(self, job_num):
+        self.configs['job_num'] = job_num
+    def job_order(self, job_order):
+        self.configs['job_order'] = job_order
+    def job_quiet(self, job_quiet):
+        self.configs['job_quiet'] = job_quiet
+    def job_local_ouput_path(self, job_local_ouput_path):
+        self.configs['job_local_ouput_path'] = job_local_ouput_path
+    def job_expected_mapper(self, job_expected_mapper):
+        self.configs['job_expected_mapper'] = job_expected_mapper
+    def job_expected_reducer(self, job_expected_reducer):
+        self.configs['job_expected_reducer'] = job_expected_reducer
+    def job_heartbeat_interval(self, job_heartbeat_interval):
+        self.configs['job_heartbeat_interval'] = job_heartbeat_interval
+    def job_connection_address(self, job_connection_address):
+        self.configs['job_connection_address'] = job_connection_address
+        
+    def job_remote_input_path(self, job_remote_input_path):
+        self.configs['job_remote_input_path'] = job_remote_input_path
+    def job_remote_ouput_path(self, job_remote_ouput_path):
+        self.configs['job_remote_ouput_path'] = job_remote_ouput_path
+
+'''   
+do not change the the name of Job because the mapper or reducer need to import it
+step 
+1. add 'job_self_path' into python search path
+2. then simply from JobModule import Job
+3. then job = Job(), job.get_stats(), job.combina_stats(), job.map_stats().
+ '''
 class Job(object):
     def __init__(self):
         self.te = FakedMintedEngine();
         
-        self.raw_stats = None
+        self.config = JobConfig()
         
+        self.raw_stats = None
         # this will be eventually transmitted to reducer as pickle on network
         self.mapped_stats = {"base_game_spins":0,
                               "base_game_total_stake":0,
@@ -57,7 +114,7 @@ class Job(object):
                               "total_spins": 0,
                               "total_stake": 0,
                               "total_wins": 0,
-                              "max_stake": []}
+                              "max_stake": 0}
         # setup by user
         
         self.reduced_stats = {"base_game_spins":0,
@@ -73,10 +130,22 @@ class Job(object):
         @aim 
         for serilization for transtion on network between mapper and reducer processes.
         '''
-        jcfg = JobConfig();
-        jcfg.kv_cfg.append({"key": "spins", "value": "gamestate"});
-        jcfg.kv_cfg.append({"key": "base_game_spins", "value": "number"});
-        jcfg.kv_cfg.append({"key":  "base_game_total_stake", "value":"number"});
+        self.config.job_name('test_new_vt')
+        root = "/home/jakez/2016209/rgs-core"
+        pycpaths = (
+                    root+"/engines",
+                    root+"/OGA",
+                    root+"/RNG",
+                    root+"/test_engine",
+                    )
+        self.config.job_pyc_paths(pycpaths)
+        
+        job_search_path = "/engines/FakedMintedEngine/root.py"
+        self.config.job_search_path(job_search_path)
+        job_module_names = ('root', 'Job')
+        self.config.job_module_names(job_module_names)
+        print self.config.configs
+        return self.config
     
     def get_stats(self):
         '''
@@ -114,6 +183,9 @@ class Job(object):
             self.mapped_stats["free_game_total_stake"] += self.raw_stats["winnings"];
             self.mapped_stats["free_game_spins"] + 1;
             
+        if self.mapped_stats["max_stake"] < self.raw_stats["stake"]:
+            self.mapped_stats["max_stake"] = self.raw_stats["stake"]
+        
     def map_stats(self):
         '''
         @aim
@@ -123,7 +195,7 @@ class Job(object):
         put any kv that can NOT be combinated together based on transaction logic
         eg, caculate the max stake a palyer pays 
         '''
-        self.mapped_stats["max_stake"].append(self.raw_stats["stake"]);
+        pass
         
     def reduce_stats(self):
         '''
@@ -137,13 +209,6 @@ class Job(object):
         self.reduced_stats["max_stake"] = self.mapped_stats["max_stake"][0]
         # caculate rtp
         self.reduced_stats["rtp"] = self.mapped_stats["total_wins"] / self.mapped_stats["total_stake"];
-    
-class MyJob(Job):
-    def __init__(self):
-        Job.__init__(self)
-        
-    def spin(self):
-        pass;
 
 if __name__ == '__main__':
      pass
