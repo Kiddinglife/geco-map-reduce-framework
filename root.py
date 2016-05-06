@@ -1,3 +1,5 @@
+# coding=utf-8 
+
 '''
 Created on 4 May 2016,
 Revied on 5 May 2016,
@@ -130,6 +132,7 @@ class Job(object):
         @aim 
         for serilization for transtion on network between mapper and reducer processes.
         '''
+        print("Job logging::get_job_config() enter\n")
         self.config.job_name('test_new_vt')
         root = "/home/jakez/2016209/rgs-core"
         pycpaths = (
@@ -144,7 +147,7 @@ class Job(object):
         self.config.job_search_path(job_search_path)
         job_module_names = ('root', 'Job')
         self.config.job_module_names(job_module_names)
-        print self.config.configs
+        print("Job logging::self.config.configs:\n%s" % self.config.configs)
         return self.config
     
     def get_stats(self):
