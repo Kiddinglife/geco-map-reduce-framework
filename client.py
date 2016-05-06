@@ -36,61 +36,80 @@ from engine import FakedMintedEngine
 
 class JobConfig(object):
     def __init__(self):
-        self.configs = {
+        self.configs = \
+        {
                     # you MUST specify:
                     "job_name": "",
-                    "job_pyc_paths": None, # tuple (many dir path)
-                    "job_search_path":"",
-                    "job_module_names": "", #eg, (root.py, Job)
-                    "job_connection_address":None, # tuple (ip, port)
+                    "job_unload_paths": None,  # tuple (many abs dir path) unload path to initor
+                    # for remote import the module a d insanit job object, 
+                    # eg.  assume we run client program in rgscore dir,
+                    # you can type python -m cluster --init ./engines/minted/client.py:Job
+                    "job_module_load_path":"",
+                    "job_connection_address":None,  # tuple (ip, port)
                     
                     # default items
                     "job_num": 1,
-                    "job_order": 0,          
+                    "job_order": 0,
                     "job_quiet": False,
                     
-                    # will store the job results
-                    # False means do not store any stats in local machine drive
-                    "job_local_ouput_path":"/temp/%s.result.dir" % self.configs["job_name"],
-                    
-                    #will be use to store mapped itermediate stats and reduced final stats in text files as backup
-                    # False means do not store any stats in remote machine drive
-                    "job_remote_ouput_path":"/temp/%s.output.dir" % self.configs["job_name"],
-                    
-                    #will be use to store the job pyc files
-                    "job_remote_input_path":"/temp/%s.input.dir" % self.configs["job_name"],
                     "job_expected_mapper":1,
                     "job_expected_reducer":1,
                     "job_heartbeat_interval":1000,  # ms
-                    }
+        }
+        
+        # will store the job results
+        # False means do not store any stats in local machine drive
+        self.configs['job_local_ouput_path'] = "/temp/%s.result.dir" % self.configs["job_name"]
+        
+        # will be use to store mapped itermediate stats and reduced final stats in text files as backup
+        # False means do not store any stats in remote machine drive
+        self.configs['job_remote_ouput_path'] = "/temp/%s.output.dir" % self.configs["job_name"]
+        
+        # will be use to store the job pyc files
+        self.configs['job_remote_input_path'] = "/temp/%s.input.dir" % self.configs["job_name"]
+        
         
     def job_name(self, name):
         self.configs['job_name'] = name
-    def job_pyc_paths(self, job_pyc_paths):
-        self.configs['job_pyc_paths'] = job_pyc_paths
-    def job_search_path(self, job_self_path):
-        self.configs['job_search_path'] = self.configs['job_remote_input_path']+job_self_path
-    def job_module_names(self, job_module_names):
-        self.configs['job_module_names'] = job_module_names
+        self.configs['job_local_ouput_path'] = "/temp/%s.result.dir" % self.configs["job_name"]
+        self.configs['job_remote_ouput_path'] = "/temp/%s.output.dir" % self.configs["job_name"]
+        self.configs['job_remote_input_path'] = "/temp/%s.input.dir" % self.configs["job_name"]
+        
+    def job_unload_paths(self, job_unload_paths):
+        self.configs['job_unload_paths'] = job_unload_paths
+        
+    def job_module_load_path(self, job_module_load_path):
+        self.configs['job_module_load_path'] = self.configs['job_remote_input_path'] + job_module_load_path
+        
+        
     def job_num(self, job_num):
         self.configs['job_num'] = job_num
+        
     def job_order(self, job_order):
         self.configs['job_order'] = job_order
+        
     def job_quiet(self, job_quiet):
         self.configs['job_quiet'] = job_quiet
+        
     def job_local_ouput_path(self, job_local_ouput_path):
         self.configs['job_local_ouput_path'] = job_local_ouput_path
+        
     def job_expected_mapper(self, job_expected_mapper):
         self.configs['job_expected_mapper'] = job_expected_mapper
+        
     def job_expected_reducer(self, job_expected_reducer):
         self.configs['job_expected_reducer'] = job_expected_reducer
+        
     def job_heartbeat_interval(self, job_heartbeat_interval):
         self.configs['job_heartbeat_interval'] = job_heartbeat_interval
+        
     def job_connection_address(self, job_connection_address):
+        
         self.configs['job_connection_address'] = job_connection_address
         
     def job_remote_input_path(self, job_remote_input_path):
         self.configs['job_remote_input_path'] = job_remote_input_path
+        
     def job_remote_ouput_path(self, job_remote_ouput_path):
         self.configs['job_remote_ouput_path'] = job_remote_ouput_path
 
@@ -132,24 +151,24 @@ class Job(object):
         @aim 
         for serilization for transtion on network between mapper and reducer processes.
         '''
-        print("Job logging::get_job_config() enter\n")
+        print("client logging::get_job_config() enter")
         self.config.job_name('test_new_vt')
         root = "/home/jakez/2016209/rgs-core"
-        pycpaths = (
-                    root+"/engines",
-                    root+"/OGA",
-                    root+"/RNG",
-                    root+"/test_engine",
+        job_unload_paths = (
+                    root + "/engines",
+                    root + "/OGA",
+                    root + "/RNG",
+                    root + "/test_engine",
                     )
-        self.config.job_pyc_paths(pycpaths)
+        self.config.job_unload_paths(job_unload_paths)
+        job_module_load_path = "/engines/FakedMintedEngine/client.py:MintedJob"
+        self.config.job_module_load_path(job_module_load_path)
+        for k, v in self.config.configs.items():
+                print((k, v))
+        print("client logging::get_job_config() leaving")
+        return self.config.configs
+
         
-        job_search_path = "/engines/FakedMintedEngine/root.py"
-        self.config.job_search_path(job_search_path)
-        job_module_names = ('root', 'Job')
-        self.config.job_module_names(job_module_names)
-        print("Job logging::self.config.configs:\n%s" % self.config.configs)
-        return self.config
-    
     def get_stats(self):
         '''
         @aim
@@ -212,6 +231,3 @@ class Job(object):
         self.reduced_stats["max_stake"] = self.mapped_stats["max_stake"][0]
         # caculate rtp
         self.reduced_stats["rtp"] = self.mapped_stats["total_wins"] / self.mapped_stats["total_stake"];
-
-if __name__ == '__main__':
-     pass

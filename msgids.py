@@ -4,11 +4,13 @@ import ctypes
 import cPickle
 import struct
 
+faked_global_msg = None;
+
 c2i_init_job = 0
 i2c_no_resource = 1
 
 # msglen is msghdr + msgdata
-class serilizer(object):
+class serializer(object):
     def __init__(self):
         self.send_buffer_max_size = 1024*1024*1024
         self.send_buf = ctypes.create_string_buffer(self.send_buffer_max_size)  
@@ -70,7 +72,7 @@ class serilizer(object):
         return ret
  
 if __name__ == '__main__':
-    sz = serilizer()
+    sz = serializer()
     print("test sz.decode a complete msg")
     bytesdata = sz.encode(c2i_init_job, "jakez")
     msgs = sz.decode(bytesdata)
