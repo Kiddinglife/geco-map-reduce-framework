@@ -1,0 +1,130 @@
+Introduction 
+mapper calls
+get_stats,
+combine_stats,
+map_stats,
+  
+ +++++++++++++++++++++
++ pyc::Job::packed Job                 +   
++ including config, logic,             +
++ raw stats, map and reduce       +
++ loaded by mapper and reducer +
++++++++++++++++++++++
+                                                 |
+                                                 |
+                                                ++++++++++++++++++++++++++++            ++++++++++++++++++++++++++++                             
+                                                + process::initor::manager                            +            +                                                                          
+                                                + demon process on                                     +            +                                                                        
+                                                + public-network interface physical host        +            +             process::Job::client                                    
+                                                + if possible                                                 +            +                                                                       
+                                                ++++++++++++++++++++++++++++            ++++++++++++++++++++++++++++                        
+                                                 |
+                                                 |
+++++++++++++++++++++
++ process::mapper                   +
++ map pairs                             +
++ startup by initor                    +
+++++++++++++++++++++
+ 
+ 
+Basically to say, our volume-tester must have two "hats" to wear :
+1) real time key value pairs generator
+Nothing special. This is what play() method does in engine.py
+2) map and reduce rules provider.
+they are essentially consisted of two pyc files relatively including map() and reduce() 
+methods and many other dependency pyc files (eg. pyc files in oga and rng directories).
+ They are provided by API user and will be eventually loaded by framework 
+for the invocations of map() and reduce() methods in it. from this perspective, 
+our play() method is pretty like plugin of framework.
+ 
+this means that the traditional way Hadoop works is not suitable for our specific case
+and we need build a new way to use map-reduce framework. 
+Why say so?
+ 
+the reason is that the stats fed to Hadoop or Yarn need to be generated in advance 
+in the formate of string text files or binary files. However, for geco, the case is different 
+as the stats must be generated in real-time by running spins. the bottleneck is the 
+number of python interpreters(PI) running play() method synchronously.
+ 
+A possible solution for this problem is to wait for all PI processes to finish all spins 
+and store the stats results into text files in the formate of key value pairs line by line. 
+the mapper then read these files and start to map all the kv pairs.
+ 
+But the weakness of this solution is that it is slow and inefficient as we spend most 
+of our the resources running spins and generating stats 
+as individual processes, we will have few resource for mapper or reduce.
+ 
+this also make it very difficult to cooperate with hadoop. Actually, the best way is
+ to run spins directly within mapper processes. 
+ 
+The whole framework will be written by python, other languages can also use this 
+framework by provide python wrappers for their map and reduce rules. 
+ 
+ 
+Simple Use Case
+ 
+0) API user creates a python "Job" class and inherit from "JobConfig" class 
+and "JobSource" class and "JobSubmitter" class.  
+ 
+1) Rewrite GetStats() method in "JobSource" class is the entry method called by
+ mapper processes to fetch the needed spin results. Also you can fetch the existing
+  text files but remember to set up the path for them.
+ 
+2) Rewrite GetCofig() method in "JobConfig" class where the user has to specify
+ the items below:
+1   set up kv names and types in formate of string:
+this is used for reducer to find the value to operate on
+example:
+("keyid": 0, "keyname": "base_game", "keytype": "string", "valuetype": "container");
+("keyid": 1, "keyname": "plays", "keytype":"string", "valuetype":"number");
+("keyid": 2, "keyname": "total_stake", "keytype" : "string", "valuetype":"number");
+assume reducer receives a intermediate kv pairs [0012] (first 0 is a unique job id allocated by initor)
+it will parse these 4 digits to locate the correct place that stores value and valuetype to take
+the correct operation on it such as sum, find max  and so on. (api user can specify the reduce rules
+ in reduce())
+2   set up job name; (this is required when client want to find the previous job they run)
+3   set up job order; (this is required when some job are sequenced to run)
+4   set up pyc files path for uploading to initor
+     4.1
+5   set up output and input path in remote machines (this required when backup stats result for re-use)
+6   set up if cache this job at remote initor
+     if so, will NOT delete the pyc files or keep it for reusage when all done
+7   set up output results path in local client (this is required if we want to store the spin resukts in local host)
+8   set up if quiet to client (this is required if we want see spin results in local host's console)
+9   set up expected mapper count to run (we may get a number less than what we want from initor)
+10 set up expected reducer count to run (we may get a number less than what we want from initor)
+11 set up heartbeat interval to initor (this is required when some reducer or mapper crashes or get 
+blocked for some reason, we can restart them)
+12 set up flag if we are stats sourcer (this is required when the kv pairs need to be generated in real-time, 
+if this flag NOT set-up, this avoid run empty GetStats() method)
+13 set up initor ip adress and port 
+14 setup if cache job dependent modules in initor (this is required if different jobs can shored a same run env)
+15 set up email address (this is required to remind user a peding job has been finished, use vt --fetch to load results to local)
+)
+3) API user runs it in cmd console to submit a job to map-reduce cluster
+  3.2) vt init path2jobmodule/job_module_name:job_class_name -> init a new job to cluster   
+         eg. vt init ./engines/minted/root:MintedJob engines dir -> minted dir -> root.py -> MintedJob class
+  3.3) vt status : show all jobs' status including job name, running status and so on
+  3.4) vt fetch [--show, --store] jobname : fetch the current stats from cluster and show it in the stdout or store it in files
+  
+4) this send a new job request to initor with  the job config
+ 
+5) initor choose mappers and reducer for this new job based on the job config
+ 
+6) initor send a job id to client if initialization is OK
+ 
+7) client then start to upload the pyc files to initor
+ 
+8) initor tell the against mapper processes to start to load these py files and start to play
+ 
+9) many python interpreter processes(PIP) running synchronously to run spin and generate key value pairs
+ 
+10) these kv pairs will be mapped directly on PIP (as they have the map() method provided by API user), 
+Here, the term "map" is more than simply making a sum of total stakes. API user can be allowed to add more
+ complicated mappings rules according to their specific needs. eg. find the minimum winnings in year 2013 for
+  a player who had maximum winnings in year of 2016. basically to say, this is pretty like SQL. 
+ 
+11) the map() method above will generate the intermediate kv pairs based on mapping rules configured in advance. 
+These intermediate kv pairs will be sent to individual reducer processes to be further processed. there can be no
+ reduce processes existing. If so, the intermediate results will be directly set back to client.
+ 
